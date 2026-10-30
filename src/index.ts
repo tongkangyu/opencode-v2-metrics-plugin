@@ -8,6 +8,17 @@ type ActiveStep = {
   textChars: number
 }
 
+type SessionStats = {
+  outputTokens: number
+  generationMs: number
+  completedSteps: number
+  firstTokenMs: number
+  firstTokenSteps: number
+  inputTokens: number
+  cacheReadTokens: number
+  cacheSamples: number
+}
+
 const isRecord = (value: unknown): value is UnknownRecord =>
   typeof value === "object" && value !== null
 
@@ -47,6 +58,7 @@ export default Plugin.define({
   async setup(ctx) {
     const latest = new Map<string, MetricsValue>()
     const steps = new Map<string, ActiveStep>()
+    const sessionStats = new Map<string, SessionStats>()
     const stored = await ctx.storage.get("last-settled")
     let lastSettled = metricLike(stored) ? stored : undefined
     let charsPerToken = 4
@@ -94,6 +106,7 @@ export default Plugin.define({
           if (!sessionID || !assistantMessageID || !model) continue
 
           const inherited = latest.get(sessionID) ?? lastSettled
+          const stats = sessionStats.get(sessionID)
           const metrics: MetricsValue = {
             sessionID,
             assistantMessageID,
@@ -103,6 +116,16 @@ export default Plugin.define({
             outputTokensPerSecond: inherited?.outputTokensPerSecond,
             cacheHitRate: inherited?.cacheHitRate,
             cacheStale: inherited?.cacheHitRate !== undefined,
+            averageOutputTokensPerSecond: stats?.generationMs
+              ? stats.outputTokens / (stats.generationMs / 1000)
+              : inherited?.averageOutputTokensPerSecond,
+            averageFirstTokenMs: stats?.firstTokenSteps
+              ? stats.firstTokenMs / stats.firstTokenSteps
+              : inherited?.averageFirstTokenMs,
+            sessionCacheHitRate: stats?.cacheSamples
+              ? cacheRate(stats.inputTokens, stats.cacheReadTokens)
+              : inherited?.sessionCacheHitRate,
+            completedSteps: stats?.completedSteps ?? inherited?.completedSteps,
           }
           steps.set(`${sessionID}:${assistantMessageID}`, { metrics, textChars: 0 })
           emit(metrics)
@@ -179,6 +202,33 @@ export default Plugin.define({
               ? outputTokens / seconds
               : undefined
 
+          const previousStats = sessionStats.get(sessionID) ?? {
+            outputTokens: 0,
+            generationMs: 0,
+            completedSteps: 0,
+            firstTokenMs: 0,
+            firstTokenSteps: 0,
+            inputTokens: 0,
+            cacheReadTokens: 0,
+            cacheSamples: 0,
+          }
+          const nextStats = { ...previousStats }
+          if (eventType === "session.step.ended" && outputTokens !== undefined && seconds > 0) {
+            nextStats.outputTokens += outputTokens
+            nextStats.generationMs += seconds * 1000
+            nextStats.completedSteps += 1
+            if (previous.firstTokenMs !== undefined) {
+              nextStats.firstTokenMs += previous.firstTokenMs
+              nextStats.firstTokenSteps += 1
+            }
+            if (inputTokens !== undefined && cacheReadTokens !== undefined) {
+              nextStats.inputTokens += inputTokens
+              nextStats.cacheReadTokens += cacheReadTokens
+              nextStats.cacheSamples += 1
+            }
+            sessionStats.set(sessionID, nextStats)
+          }
+
           if (exactRate !== undefined && step.textChars > 0 && outputTokens !== undefined) {
             charsPerToken = Math.min(8, Math.max(1, step.textChars / outputTokens))
           }
@@ -198,6 +248,16 @@ export default Plugin.define({
             cacheStale: exactCacheRate === undefined && cacheHitRate !== undefined,
             liveOutputTokensPerSecond: undefined,
             outputTokensPerSecond: rate,
+            averageOutputTokensPerSecond: nextStats.generationMs
+              ? nextStats.outputTokens / (nextStats.generationMs / 1000)
+              : previous.averageOutputTokensPerSecond,
+            averageFirstTokenMs: nextStats.firstTokenSteps
+              ? nextStats.firstTokenMs / nextStats.firstTokenSteps
+              : previous.averageFirstTokenMs,
+            sessionCacheHitRate: nextStats.cacheSamples
+              ? cacheRate(nextStats.inputTokens, nextStats.cacheReadTokens)
+              : previous.sessionCacheHitRate,
+            completedSteps: nextStats.completedSteps || previous.completedSteps,
             rateEstimated: exactRate === undefined,
             finish: text(data.finish),
             error: isRecord(data.error) ? text(data.error.message) : undefined,

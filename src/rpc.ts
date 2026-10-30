@@ -30,6 +30,10 @@ const metricsSchema = {
     cacheHitRate: { type: "number" },
     outputTokensPerSecond: { type: "number" },
     liveOutputTokensPerSecond: { type: "number" },
+    averageOutputTokensPerSecond: { type: "number" },
+    averageFirstTokenMs: { type: "number" },
+    sessionCacheHitRate: { type: "number" },
+    completedSteps: { type: "number" },
     rateEstimated: { type: "boolean" },
     cacheStale: { type: "boolean" },
     finish: { type: "string" },
@@ -92,6 +96,10 @@ export type MetricsValue = {
   cacheHitRate?: number
   outputTokensPerSecond?: number
   liveOutputTokensPerSecond?: number
+  averageOutputTokensPerSecond?: number
+  averageFirstTokenMs?: number
+  sessionCacheHitRate?: number
+  completedSteps?: number
   rateEstimated?: boolean
   cacheStale?: boolean
   finish?: string

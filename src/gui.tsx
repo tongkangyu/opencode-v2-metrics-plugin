@@ -9,14 +9,16 @@ const formatDuration = (milliseconds: number | undefined) => {
 }
 
 const formatRate = (metric: MetricsValue) => {
-  const tokensPerSecond = metric.liveOutputTokensPerSecond ?? metric.outputTokensPerSecond
+  const tokensPerSecond =
+    metric.averageOutputTokensPerSecond ?? metric.liveOutputTokensPerSecond ?? metric.outputTokensPerSecond
   if (tokensPerSecond === undefined || !Number.isFinite(tokensPerSecond)) return "—"
   return `${tokensPerSecond.toFixed(tokensPerSecond >= 100 ? 0 : 1)} tok/s`
 }
 
 const formatPercent = (metric: MetricsValue) => {
-  if (metric.cacheHitRate === undefined || !Number.isFinite(metric.cacheHitRate)) return "—"
-  return `${(metric.cacheHitRate * 100).toFixed(1)}%`
+  const value = metric.sessionCacheHitRate ?? metric.cacheHitRate
+  if (value === undefined || !Number.isFinite(value)) return "—"
+  return `${(value * 100).toFixed(1)}%`
 }
 
 const formatModel = (metrics: MetricsValue) => {
@@ -82,8 +84,8 @@ export default Plugin.define({
         }
 
         return {
-          label: `${formatRate(metric)} · ${formatDuration(metric.firstTokenMs)} · ${formatPercent(metric)}`,
-          title: `速度 ${formatRate(metric)} · 首字 ${formatDuration(metric.firstTokenMs)} · 缓存 ${formatPercent(metric)} · ${formatModel(metric)}`,
+          label: `${metric.averageOutputTokensPerSecond !== undefined ? "平均" : "实时"} ${formatRate(metric)} · TTFT ${formatDuration(metric.averageFirstTokenMs ?? metric.firstTokenMs)} · 缓存 ${formatPercent(metric)}`,
+          title: `平均速度 ${metric.averageOutputTokensPerSecond !== undefined ? formatRate(metric) : "—"} · 实时速度 ${metric.liveOutputTokensPerSecond !== undefined ? formatRate({ ...metric, averageOutputTokensPerSecond: undefined }) : "—"} · 首字均值 ${formatDuration(metric.averageFirstTokenMs ?? metric.firstTokenMs)} · 缓存 ${formatPercent(metric)} · ${formatModel(metric)}`,
         }
       },
     })
