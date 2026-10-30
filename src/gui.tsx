@@ -29,11 +29,9 @@ const formatModel = (metrics: MetricsValue) => {
 export default Plugin.define({
   setup(ctx) {
     const [metricsBySession, setMetricsBySession] = createSignal<Record<string, MetricsValue>>({})
-    const [lastMetric, setLastMetric] = createSignal<MetricsValue | undefined>()
 
     const remember = (metric: MetricsValue) => {
       setMetricsBySession((previous) => ({ ...previous, [metric.sessionID]: metric }))
-      setLastMetric(metric)
     }
 
     createKeyed(
@@ -75,14 +73,8 @@ export default Plugin.define({
       id: "metrics",
       order: 90,
       show: ({ session }) => {
-        const metric = metricsBySession()[session.id] ?? lastMetric()
-        if (!metric) {
-          return {
-            label: "— · — · —",
-            title: "速度 — · 首字 — · 缓存 —",
-          }
-        }
-
+        const metric = metricsBySession()[session.id]
+        if (!metric) return { label: "— · — · —", title: "速度 — · 首字 — · 缓存 —" }
         return {
           label: `${metric.averageOutputTokensPerSecond !== undefined ? "平均" : "实时"} ${formatRate(metric)} · TTFT ${formatDuration(metric.averageFirstTokenMs ?? metric.firstTokenMs)} · 缓存 ${formatPercent(metric)}`,
           title: `平均速度 ${metric.averageOutputTokensPerSecond !== undefined ? formatRate(metric) : "—"} · 实时速度 ${metric.liveOutputTokensPerSecond !== undefined ? formatRate({ ...metric, averageOutputTokensPerSecond: undefined }) : "—"} · 首字均值 ${formatDuration(metric.averageFirstTokenMs ?? metric.firstTokenMs)} · 缓存 ${formatPercent(metric)} · ${formatModel(metric)}`,

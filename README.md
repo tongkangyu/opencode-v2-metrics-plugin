@@ -1,10 +1,10 @@
 # OpenCode V2 Metrics Plugin
 
-OpenCode V2 Desktop 指标插件，在窗口底部显示最近一次模型步骤的速度、首字时间和缓存命中率。
+OpenCode V2 Desktop 指标插件，在输入框上方显示会话平均速度、实时速度、首字时间和缓存命中率。
 
 ## 重要限制
 
-这是 **Desktop GUI 插件**。指标栏显示在 OpenCode Desktop 的 `window.bottom`，不会显示在纯 TUI/CLI 窗口中。
+这是 **Desktop GUI 插件**。指标栏显示在 OpenCode Desktop 的 Composer 状态区域，不会显示在纯 TUI/CLI 窗口中。
 
 ## 安装
 
@@ -64,10 +64,13 @@ uninstall.cmd -KeepData
 
 - `session.step.started`
 - `session.text.started`
+- `session.text.delta`
 - `session.step.ended`
 - `session.step.failed`
 
-GUI 通过 V2 GUI 插件上下文的 `ctx.client.rpc(...)` 读取服务端指标，并在 `window.bottom` 渲染。
+GUI 通过 V2 GUI 插件上下文的 `ctx.client.rpc(...)` 读取服务端指标，并在 ComposerPill 渲染。
+
+指标严格按 `sessionID` 隔离。新会话不会继承旧会话数据；收到 `session.deleted` 后会清理对应的内存指标。插件不保存每个会话的历史文件，内存缓存也有固定上限。
 
 ## 开发
 

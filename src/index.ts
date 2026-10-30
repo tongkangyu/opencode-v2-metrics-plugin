@@ -43,39 +43,23 @@ const cacheRate = (inputTokens: number | undefined, cacheReadTokens: number | un
   return promptTokens > 0 ? cacheReadTokens / promptTokens : undefined
 }
 
-const metricLike = (value: unknown): value is MetricsValue => {
-  if (!isRecord(value)) return false
-  return (
-    typeof value.sessionID === "string" &&
-    typeof value.assistantMessageID === "string" &&
-    typeof value.startedAt === "number" &&
-    modelRef(value.model) !== undefined
-  )
-}
-
 export default Plugin.define({
   id: "opencode-v2-metrics",
   async setup(ctx) {
     const latest = new Map<string, MetricsValue>()
     const steps = new Map<string, ActiveStep>()
     const sessionStats = new Map<string, SessionStats>()
-    const stored = await ctx.storage.get("last-settled")
-    let lastSettled = metricLike(stored) ? stored : undefined
     let charsPerToken = 4
+
+    // Remove the legacy cross-session snapshot from versions that persisted it.
+    await ctx.storage.remove("last-settled")
 
     const rpc = await ctx.rpc.register(Metrics, {
       get: async (input) => {
         const sessionID = (input as { sessionID: string }).sessionID
-        const metric = latest.get(sessionID) ??
-          (lastSettled ? { ...lastSettled, sessionID } : null)
-        return { metrics: metric }
+        return { metrics: latest.get(sessionID) ?? null }
       },
     })
-
-    const persistSettled = (metrics: MetricsValue) => {
-      lastSettled = metrics
-      void ctx.storage.set("last-settled", JSON.parse(JSON.stringify(metrics)))
-    }
 
     const emit = (metrics: MetricsValue) => {
       latest.set(metrics.sessionID, metrics)
@@ -90,6 +74,14 @@ export default Plugin.define({
       }
     }
 
+    const trimSessionStats = () => {
+      while (sessionStats.size > 300) {
+        const first = sessionStats.keys().next().value
+        if (first === undefined) return
+        sessionStats.delete(first)
+      }
+    }
+
     const controller = new AbortController()
     void (async () => {
       for await (const rawEvent of ctx.event.subscribe({ signal: controller.signal })) {
@@ -98,6 +90,17 @@ export default Plugin.define({
         const data = isRecord(event.data) ? event.data : undefined
         if (!eventType || !data) continue
 
+        if (eventType === "session.deleted") {
+          const sessionID = text(data.sessionID)
+          if (!sessionID) continue
+          latest.delete(sessionID)
+          sessionStats.delete(sessionID)
+          for (const key of steps.keys()) {
+            if (key.startsWith(`${sessionID}:`)) steps.delete(key)
+          }
+          continue
+        }
+
         if (eventType === "session.step.started") {
           const sessionID = text(data.sessionID)
           const assistantMessageID = text(data.assistantMessageID)
@@ -105,7 +108,7 @@ export default Plugin.define({
           const startedAt = number(data.started) ?? number(event.created) ?? Date.now()
           if (!sessionID || !assistantMessageID || !model) continue
 
-          const inherited = latest.get(sessionID) ?? lastSettled
+          const inherited = latest.get(sessionID)
           const stats = sessionStats.get(sessionID)
           const metrics: MetricsValue = {
             sessionID,
@@ -227,6 +230,7 @@ export default Plugin.define({
               nextStats.cacheSamples += 1
             }
             sessionStats.set(sessionID, nextStats)
+            trimSessionStats()
           }
 
           if (exactRate !== undefined && step.textChars > 0 && outputTokens !== undefined) {
@@ -264,7 +268,6 @@ export default Plugin.define({
           }
 
           steps.delete(key)
-          if (metrics.status === "completed") persistSettled(metrics)
           emit(metrics)
           trimLatest()
         }
@@ -276,6 +279,7 @@ export default Plugin.define({
     return () => {
       controller.abort()
       void rpc.dispose()
+      void ctx.storage.remove("last-settled")
     }
   },
 })
