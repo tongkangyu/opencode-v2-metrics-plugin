@@ -31,11 +31,11 @@ export default Plugin.define({
         .opencode-v2-metrics-bar {
           display: flex;
           align-items: center;
-          justify-content: center;
+          justify-content: flex-end;
           gap: 14px;
-          min-height: 26px;
-          padding: 3px 12px;
-          border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+          min-width: 0;
+          margin-left: 12px;
+          padding: 0 8px;
           color: color-mix(in srgb, currentColor 72%, transparent);
           font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
           white-space: nowrap;
@@ -111,10 +111,9 @@ export default Plugin.define({
     )
 
     ctx.add(Slot, {
-      at: "window.bottom",
+      at: "session.header",
       order: 90,
-      render: () => {
-        const session = ctx.sessions.current()
+      render: ({ session }) => {
         const metric = session ? metricsBySession()[session.id] : undefined
         return (
           <Show when={metric}>
