@@ -1,0 +1,11 @@
+{
+  "id": "opencode-v2-metrics-plugin",
+  "version": "1.1.0",
+  "pluginFiles": [
+    "package.json",
+    "src/index.ts",
+    "src/rpc.ts",
+    "src/gui.tsx",
+    "dist/gui-experimental.cjs"
+  ]
+}

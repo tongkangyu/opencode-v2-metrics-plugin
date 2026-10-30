@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "opencode-v2-metrics-plugin",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./gui-experimental": "./dist/gui-experimental.cjs",
+    "./rpc": "./src/rpc.ts"
+  },
+  "files": [
+    "src",
+    "dist",
+    "package.json"
+  ],
+  "dependencies": {
+    "@opencode/plugin": "2.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.2",
+    "solid-js": "1.9.17",
+    "typescript": "^5.9.3",
+    "vite": "7.3.7",
+    "vite-plugin-solid": "2.11.10"
+  }
+}
