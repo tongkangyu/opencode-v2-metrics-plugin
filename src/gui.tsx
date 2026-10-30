@@ -1,20 +1,23 @@
-import { For, Show, createSignal, onCleanup } from "solid-js"
-import { createKeyed, Plugin, Slot, Style } from "@opencode/plugin/gui"
+import { createSignal, onCleanup } from "solid-js"
+import { ComposerPill, createKeyed, Plugin } from "@opencode/plugin/gui"
 import { Metrics, type MetricsValue } from "./rpc.js"
 
 const formatDuration = (milliseconds: number | undefined) => {
   if (milliseconds === undefined || !Number.isFinite(milliseconds)) return "—"
   if (milliseconds < 1000) return `${Math.round(milliseconds)} ms`
-  return `${(milliseconds / 1000).toFixed(2)} s`
+  return `${(milliseconds / 1000).toFixed(2)}s`
 }
 
-const formatRate = (tokensPerSecond: number | undefined) =>
-  tokensPerSecond === undefined || !Number.isFinite(tokensPerSecond)
-    ? "—"
-    : `${tokensPerSecond.toFixed(tokensPerSecond >= 100 ? 0 : 1)} tok/s`
+const formatRate = (metric: MetricsValue) => {
+  const tokensPerSecond = metric.liveOutputTokensPerSecond ?? metric.outputTokensPerSecond
+  if (tokensPerSecond === undefined || !Number.isFinite(tokensPerSecond)) return "—"
+  return `${tokensPerSecond.toFixed(tokensPerSecond >= 100 ? 0 : 1)} tok/s`
+}
 
-const formatPercent = (value: number | undefined) =>
-  value === undefined || !Number.isFinite(value) ? "—" : `${(value * 100).toFixed(1)}%`
+const formatPercent = (metric: MetricsValue) => {
+  if (metric.cacheHitRate === undefined || !Number.isFinite(metric.cacheHitRate)) return "—"
+  return `${(metric.cacheHitRate * 100).toFixed(1)}%`
+}
 
 const formatModel = (metrics: MetricsValue) => {
   const id = `${metrics.model.providerID}/${metrics.model.modelID}`
@@ -24,56 +27,12 @@ const formatModel = (metrics: MetricsValue) => {
 export default Plugin.define({
   setup(ctx) {
     const [metricsBySession, setMetricsBySession] = createSignal<Record<string, MetricsValue>>({})
+    const [lastMetric, setLastMetric] = createSignal<MetricsValue | undefined>()
 
-    ctx.add(
-      Style,
-      `
-        .opencode-v2-metrics-bar {
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          gap: 14px;
-          min-width: 0;
-          margin-left: 12px;
-          padding: 0 8px;
-          color: color-mix(in srgb, currentColor 72%, transparent);
-          font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-          white-space: nowrap;
-          overflow: hidden;
-        }
-
-        .opencode-v2-metrics-bar[data-status="streaming"] {
-          color: color-mix(in srgb, currentColor 88%, transparent);
-        }
-
-        .opencode-v2-metrics-item {
-          display: inline-flex;
-          align-items: baseline;
-          gap: 5px;
-        }
-
-        .opencode-v2-metrics-label {
-          opacity: 0.65;
-        }
-
-        .opencode-v2-metrics-value {
-          color: currentColor;
-          font-weight: 600;
-        }
-
-        .opencode-v2-metrics-model {
-          max-width: 260px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          opacity: 0.55;
-        }
-
-        @media (max-width: 720px) {
-          .opencode-v2-metrics-bar { gap: 8px; font-size: 10px; }
-          .opencode-v2-metrics-model { display: none; }
-        }
-      `,
-    )
+    const remember = (metric: MetricsValue) => {
+      setMetricsBySession((previous) => ({ ...previous, [metric.sessionID]: metric }))
+      setLastMetric(metric)
+    }
 
     createKeyed(
       () => ctx.client,
@@ -81,7 +40,7 @@ export default Plugin.define({
         const rpc = client.rpc(Metrics)
         const unsubscribe = rpc.events.on("updated", (event) => {
           const metric = event.data.metrics as MetricsValue
-          setMetricsBySession((previous) => ({ ...previous, [metric.sessionID]: metric }))
+          remember(metric)
         })
         onCleanup(unsubscribe)
 
@@ -91,7 +50,7 @@ export default Plugin.define({
             const snapshot = result as { metrics?: MetricsValue | null }
             if (!snapshot.metrics) return
             const metric = snapshot.metrics
-            setMetricsBySession((previous) => ({ ...previous, [metric.sessionID]: metric }))
+            remember(metric)
           })
         }
       },
@@ -105,48 +64,29 @@ export default Plugin.define({
           const snapshot = result as { metrics?: MetricsValue | null }
           if (!snapshot.metrics) return
           const metric = snapshot.metrics
-          setMetricsBySession((previous) => ({ ...previous, [metric.sessionID]: metric }))
+          remember(metric)
         })
       },
     )
 
-    ctx.add(Slot, {
-      at: "session.header",
+    ctx.add(ComposerPill, {
+      id: "metrics",
       order: 90,
-      render: ({ session }) => {
-        const metric = session ? metricsBySession()[session.id] : undefined
-        return (
-          <Show when={metric}>
-            {(current) => (
-              <div
-                class="opencode-v2-metrics-bar"
-                data-status={current().status}
-                title={formatModel(current())}
-              >
-                <span class="opencode-v2-metrics-item">
-                  <span class="opencode-v2-metrics-label">速度</span>
-                  <span class="opencode-v2-metrics-value">
-                    {formatRate(current().outputTokensPerSecond)}
-                  </span>
-                </span>
-                <span class="opencode-v2-metrics-item">
-                  <span class="opencode-v2-metrics-label">首字</span>
-                  <span class="opencode-v2-metrics-value">
-                    {formatDuration(current().firstTokenMs)}
-                  </span>
-                </span>
-                <span class="opencode-v2-metrics-item">
-                  <span class="opencode-v2-metrics-label">缓存</span>
-                  <span class="opencode-v2-metrics-value">
-                    {formatPercent(current().cacheHitRate)}
-                  </span>
-                </span>
-                <span class="opencode-v2-metrics-model">{formatModel(current())}</span>
-              </div>
-            )}
-          </Show>
-        )
+      show: ({ session }) => {
+        const metric = metricsBySession()[session.id] ?? lastMetric()
+        if (!metric) {
+          return {
+            label: "— · — · —",
+            title: "速度 — · 首字 — · 缓存 —",
+          }
+        }
+
+        return {
+          label: `${formatRate(metric)} · ${formatDuration(metric.firstTokenMs)} · ${formatPercent(metric)}`,
+          title: `速度 ${formatRate(metric)} · 首字 ${formatDuration(metric.firstTokenMs)} · 缓存 ${formatPercent(metric)} · ${formatModel(metric)}`,
+        }
       },
     })
+
   },
 })
