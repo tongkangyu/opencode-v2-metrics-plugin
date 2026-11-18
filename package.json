@@ -1,10 +1,27 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "opencode-v2-metrics-plugin",
-  "version": "1.5.0",
+  "version": "1.6.1",
   "private": true,
   "type": "module",
   "license": "MIT",
+  "description": "OpenCode V2 Desktop plugin for response speed, TTFT, network first byte, and cache hit rate metrics",
+  "homepage": "https://github.com/tongkangyu/opencode-v2-metrics-plugin#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tongkangyu/opencode-v2-metrics-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tongkangyu/opencode-v2-metrics-plugin/issues"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "metrics",
+    "ttft",
+    "tokens-per-second",
+    "cache-hit-rate"
+  ],
   "scripts": {
     "build": "vite build",
     "typecheck": "tsc --noEmit"

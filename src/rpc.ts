@@ -32,6 +32,11 @@ const metricsSchema = {
     liveOutputTokensPerSecond: { type: "number" },
     averageOutputTokensPerSecond: { type: "number" },
     averageFirstTokenMs: { type: "number" },
+    networkFirstByteMs: { type: "number" },
+    averageNetworkFirstByteMs: { type: "number" },
+    generationMs: { type: "number" },
+    streamMs: { type: "number" },
+    averageGenerationMs: { type: "number" },
     sessionCacheHitRate: { type: "number" },
     completedSteps: { type: "number" },
     rateEstimated: { type: "boolean" },
@@ -98,6 +103,11 @@ export type MetricsValue = {
   liveOutputTokensPerSecond?: number
   averageOutputTokensPerSecond?: number
   averageFirstTokenMs?: number
+  networkFirstByteMs?: number
+  averageNetworkFirstByteMs?: number
+  generationMs?: number
+  streamMs?: number
+  averageGenerationMs?: number
   sessionCacheHitRate?: number
   completedSteps?: number
   rateEstimated?: boolean
